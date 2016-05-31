@@ -1,5 +1,5 @@
 require 'synapse/service_watcher/base'
-require 'aws-sdk'
+require 'aws-sdk-v1'
 
 class Synapse::ServiceWatcher
   class Ec2tagWatcher < BaseWatcher
