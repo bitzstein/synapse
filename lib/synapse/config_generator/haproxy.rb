@@ -1,15 +1,19 @@
+require 'synapse/config_generator/base'
+
 require 'fileutils'
 require 'json'
 require 'socket'
 require 'digest/sha1'
 
-module Synapse
-  class Haproxy
-    include Logging
-    attr_reader :opts
+class Synapse::ConfigGenerator
+  class Haproxy < BaseGenerator
+    include Synapse::Logging
 
-    # these come from the documentation for haproxy 1.5
+    NAME = 'haproxy'.freeze
+
+    # these come from the documentation for haproxy (1.5 and 1.6)
     # http://haproxy.1wt.eu/download/1.5/doc/configuration.txt
+    # http://haproxy.1wt.eu/download/1.6/doc/configuration.txt
     SECTION_FIELDS = {
       "backend" => [
         "acl",
@@ -24,6 +28,11 @@ module Synapse
         "description",
         "disabled",
         "dispatch",
+        "email-alert from",
+        "email-alert level",
+        "email-alert mailers",
+        "email-alert myhostname",
+        "email-alert to",
         "enabled",
         "errorfile",
         "errorloc",
@@ -38,11 +47,59 @@ module Synapse
         "http-check send-state",
         "http-request",
         "http-response",
+        "http-send-name-header",
         "http-reuse",
+        "http-send-name-header",
         "id",
         "ignore-persist",
+        "load-server-state-from-file",
         "log",
+        "log-tag",
+        "max-keep-alive-queue",
         "mode",
+        "no log",
+        "no option abortonclose",
+        "no option accept-invalid-http-response",
+        "no option allbackups",
+        "no option allredisp",
+        "no option checkcache",
+        "no option forceclose",
+        "no option forwardfor",
+        "no option http-buffer-request",
+        "no option http-keep-alive",
+        "no option http-no-delay",
+        "no option http-pretend-keepalive",
+        "no option http-server-close",
+        "no option http-tunnel",
+        "no option httpchk",
+        "no option httpclose",
+        "no option httplog",
+        "no option http_proxy",
+        "no option independent-streams",
+        "no option lb-agent-chk",
+        "no option ldap-check",
+        "no option external-check",
+        "no option log-health-checks",
+        "no option mysql-check",
+        "no option pgsql-check",
+        "no option nolinger",
+        "no option originalto",
+        "no option persist",
+        "no option pgsql-check",
+        "no option prefer-last-server",
+        "no option redispatch",
+        "no option redis-check",
+        "no option smtpchk",
+        "no option splice-auto",
+        "no option splice-request",
+        "no option splice-response",
+        "no option srvtcpka",
+        "no option ssl-hello-chk",
+        "no option tcp-check",
+        "no option tcp-smart-connect",
+        "no option tcpka",
+        "no option tcplog",
+        "no option transparent",
         "option abortonclose",
         "option accept-invalid-http-response",
         "option allbackups",
@@ -50,9 +107,12 @@ module Synapse
         "option checkcache",
         "option forceclose",
         "option forwardfor",
+        "option http-buffer-request",
+        "option http-keep-alive",
         "option http-no-delay",
         "option http-pretend-keepalive",
         "option http-server-close",
+        "option http-tunnel",
         "option httpchk",
         "option httpclose",
         "option httplog",
@@ -60,12 +120,15 @@ module Synapse
         "option independent-streams",
         "option lb-agent-chk",
         "option ldap-check",
+        "option external-check",
         "option log-health-checks",
         "option mysql-check",
         "option pgsql-check",
         "option nolinger",
         "option originalto",
         "option persist",
+        "option pgsql-check",
+        "option prefer-last-server",
         "option redispatch",
         "option redis-check",
         "option smtpchk",
@@ -79,6 +142,8 @@ module Synapse
         "option tcpka",
         "option tcplog",
         "option transparent",
+        "external-check command",
+        "external-check path",
         "persist rdp-cookie",
         "redirect",
         "redisp",
@@ -107,6 +172,7 @@ module Synapse
         "rspirep",
         "rsprep",
         "server",
+        "server-state-file-name",
         "source",
         "srvtimeout",
         "stats admin",
@@ -141,6 +207,7 @@ module Synapse
         "timeout http-request",
         "timeout queue",
         "timeout server",
+        "timeout server-fin",
         "timeout srvtimeout",
         "timeout tarpit",
         "timeout tunnel",
@@ -158,6 +225,11 @@ module Synapse
         "default-server",
         "default_backend",
         "disabled",
+        "email-alert from",
+        "email-alert level",
+        "email-alert mailers",
+        "email-alert myhostname",
+        "email-alert to",
         "enabled",
         "errorfile",
         "errorloc",
@@ -169,11 +241,70 @@ module Synapse
         "http-check disable-on-404",
         "http-check send-state",
         "http-reuse",
+        "load-server-state-from-file",
         "log",
+        "log-format",
+        "log-format-sd",
+        "log-tag",
+        "max-keep-alive-queue",
         "maxconn",
         "mode",
         "monitor-net",
         "monitor-uri",
+        "no log",
+        "no option abortonclose",
+        "no option accept-invalid-http-request",
+        "no option accept-invalid-http-response",
+        "no option allbackups",
+        "no option allredisp",
+        "no option checkcache",
+        "no option clitcpka",
+        "no option contstats",
+        "no option dontlog-normal",
+        "no option dontlognull",
+        "no option forceclose",
+        "no option forwardfor",
+        "no option http-buffer-request",
+        "no option http-ignore-probes",
+        "no option http-keep-alive",
+        "no option http-no-delay",
+        "no option http-pretend-keepalive",
+        "no option http-server-close",
+        "no option http-tunnel",
+        "no option http-use-proxy-header",
+        "no option httpchk",
+        "no option httpclose",
+        "no option httplog",
+        "no option http_proxy",
+        "no option independent-streams",
+        "no option lb-agent-chk",
+        "no option ldap-check",
+        "no option external-check",
+        "no option log-health-checks",
+        "no option log-separate-errors",
+        "no option logasap",
+        "no option mysql-check",
+        "no option pgsql-check",
+        "no option nolinger",
+        "no option originalto",
+        "no option persist",
+        "no option pgsql-check",
+        "no option prefer-last-server",
+        "no option redispatch",
+        "no option redis-check",
+        "no option smtpchk",
+        "no option socket-stats",
+        "no option splice-auto",
+        "no option splice-request",
+        "no option splice-response",
+        "no option srvtcpka",
+        "no option ssl-hello-chk",
+        "no option tcp-check",
+        "no option tcp-smart-accept",
+        "no option tcp-smart-connect",
+        "no option tcpka",
+        "no option tcplog",
+        "no option transparent",
         "option abortonclose",
         "option accept-invalid-http-request",
         "option accept-invalid-http-response",
@@ -186,9 +317,13 @@ module Synapse
         "option dontlognull",
         "option forceclose",
         "option forwardfor",
+        "option http-buffer-request",
+        "option http-ignore-probes",
+        "option http-keep-alive",
         "option http-no-delay",
         "option http-pretend-keepalive",
         "option http-server-close",
+        "option http-tunnel",
         "option http-use-proxy-header",
         "option httpchk",
         "option httpclose",
@@ -197,6 +332,7 @@ module Synapse
         "option independent-streams",
         "option lb-agent-chk",
         "option ldap-check",
+        "option external-check",
         "option log-health-checks",
         "option log-separate-errors",
         "option logasap",
@@ -205,6 +341,8 @@ module Synapse
         "option nolinger",
         "option originalto",
         "option persist",
+        "option pgsql-check",
+        "option prefer-last-server",
         "option redispatch",
         "option redis-check",
         "option smtpchk",
@@ -220,11 +358,14 @@ module Synapse
         "option tcpka",
         "option tcplog",
         "option transparent",
+        "external-check command",
+        "external-check path",
         "persist rdp-cookie",
         "rate-limit sessions",
         "redisp",
         "redispatch",
         "retries",
+        "server-state-file-name",
         "source",
         "srvtimeout",
         "stats auth",
@@ -239,6 +380,7 @@ module Synapse
         "stats uri",
         "timeout check",
         "timeout client",
+        "timeout client-fin",
         "timeout clitimeout",
         "timeout connect",
         "timeout contimeout",
@@ -246,6 +388,7 @@ module Synapse
         "timeout http-request",
         "timeout queue",
         "timeout server",
+        "timeout server-fin",
         "timeout srvtimeout",
         "timeout tarpit",
         "timeout tunnel",
@@ -264,9 +407,15 @@ module Synapse
         "capture response header",
         "clitimeout",
         "compression",
+        "declare capture",
         "default_backend",
         "description",
         "disabled",
+        "email-alert from",
+        "email-alert level",
+        "email-alert mailers",
+        "email-alert myhostname",
+        "email-alert to",
         "enabled",
         "errorfile",
         "errorloc",
@@ -279,11 +428,45 @@ module Synapse
         "id",
         "ignore-persist",
         "log",
+        "log-format",
+        "log-format-sd",
+        "log-tag",
         "maxconn",
         "mode",
         "monitor fail",
         "monitor-net",
         "monitor-uri",
+        "no log",
+        "no option accept-invalid-http-request",
+        "no option clitcpka",
+        "no option contstats",
+        "no option dontlog-normal",
+        "no option dontlognull",
+        "no option forceclose",
+        "no option forwardfor",
+        "no option http-buffer-request",
+        "no option http-ignore-probes",
+        "no option http-keep-alive",
+        "no option http-no-delay",
+        "no option http-pretend-keepalive",
+        "no option http-server-close",
+        "no option http-tunnel",
+        "no option http-use-proxy-header",
+        "no option httpclose",
+        "no option httplog",
+        "no option http_proxy",
+        "no option independent-streams",
+        "no option log-separate-errors",
+        "no option logasap",
+        "no option nolinger",
+        "no option originalto",
+        "no option socket-stats",
+        "no option splice-auto",
+        "no option splice-request",
+        "no option splice-response",
+        "no option tcp-smart-accept",
+        "no option tcpka",
+        "no option tcplog",
         "option accept-invalid-http-request",
         "option clitcpka",
         "option contstats",
@@ -291,9 +474,13 @@ module Synapse
         "option dontlognull",
         "option forceclose",
         "option forwardfor",
+        "option http-buffer-request",
+        "option http-ignore-probes",
+        "option http-keep-alive",
         "option http-no-delay",
         "option http-pretend-keepalive",
         "option http-server-close",
+        "option http-tunnel",
         "option http-use-proxy-header",
         "option httpclose",
         "option httplog",
@@ -334,10 +521,23 @@ module Synapse
         "rspideny",
         "rspirep",
         "rsprep",
+        "stats admin",
+        "stats auth",
+        "stats enable",
+        "stats hide-version",
+        "stats http-request",
+        "stats realm",
+        "stats refresh",
+        "stats scope",
+        "stats show-desc",
+        "stats show-legends",
+        "stats show-node",
+        "stats uri",
         "tcp-request connection",
         "tcp-request content",
         "tcp-request inspect-delay",
         "timeout client",
+        "timeout client-fin",
         "timeout clitimeout",
         "timeout http-keep-alive",
         "timeout http-request",
@@ -361,11 +561,17 @@ module Synapse
         "compression",
         "contimeout",
         "cookie",
+        "declare capture",
         "default-server",
         "default_backend",
         "description",
         "disabled",
         "dispatch",
+        "email-alert from",
+        "email-alert level",
+        "email-alert mailers",
+        "email-alert myhostname",
+        "email-alert to",
         "enabled",
         "errorfile",
         "errorloc",
@@ -380,15 +586,76 @@ module Synapse
         "http-check send-state",
         "http-request",
         "http-response",
+        "http-send-name-header",
         "http-reuse",
+        "http-send-name-header",
         "id",
         "ignore-persist",
+        "load-server-state-from-file",
         "log",
+        "log-format",
+        "log-format-sd",
+        "log-tag",
+        "max-keep-alive-queue",
         "maxconn",
         "mode",
         "monitor fail",
         "monitor-net",
         "monitor-uri",
+        "no log",
+        "no option abortonclose",
+        "no option accept-invalid-http-request",
+        "no option accept-invalid-http-response",
+        "no option allbackups",
+        "no option allredisp",
+        "no option checkcache",
+        "no option clitcpka",
+        "no option contstats",
+        "no option dontlog-normal",
+        "no option dontlognull",
+        "no option forceclose",
+        "no option forwardfor",
+        "no option http-buffer-request",
+        "no option http-ignore-probes",
+        "no option http-keep-alive",
+        "no option http-no-delay",
+        "no option http-pretend-keepalive",
+        "no option http-server-close",
+        "no option http-tunnel",
+        "no option http-use-proxy-header",
+        "no option httpchk",
+        "no option httpclose",
+        "no option httplog",
+        "no option http_proxy",
+        "no option independent-streams",
+        "no option lb-agent-chk",
+        "no option ldap-check",
+        "no option external-check",
+        "no option log-health-checks",
+        "no option log-separate-errors",
+        "no option logasap",
+        "no option mysql-check",
+        "no option pgsql-check",
+        "no option nolinger",
+        "no option originalto",
+        "no option persist",
+        "no option pgsql-check",
+        "no option prefer-last-server",
+        "no option redispatch",
+        "no option redis-check",
+        "no option smtpchk",
+        "no option socket-stats",
+        "no option splice-auto",
+        "no option splice-request",
+        "no option splice-response",
+        "no option srvtcpka",
+        "no option ssl-hello-chk",
+        "no option tcp-check",
+        "no option tcp-smart-accept",
+        "no option tcp-smart-connect",
+        "no option tcpka",
+        "no option tcplog",
+        "no option transparent",
         "option abortonclose",
         "option accept-invalid-http-request",
         "option accept-invalid-http-response",
@@ -401,9 +668,13 @@ module Synapse
         "option dontlognull",
         "option forceclose",
         "option forwardfor",
+        "option http-buffer-request",
+        "option http-ignore-probes",
+        "option http-keep-alive",
         "option http-no-delay",
         "option http-pretend-keepalive",
         "option http-server-close",
+        "option http-tunnel",
         "option http-use-proxy-header",
         "option httpchk",
         "option httpclose",
@@ -412,6 +683,7 @@ module Synapse
         "option independent-streams",
         "option lb-agent-chk",
         "option ldap-check",
+        "option external-check",
         "option log-health-checks",
         "option log-separate-errors",
         "option logasap",
@@ -420,6 +692,8 @@ module Synapse
         "option nolinger",
         "option originalto",
         "option persist",
+        "option pgsql-check",
+        "option prefer-last-server",
         "option redispatch",
         "option redis-check",
         "option smtpchk",
@@ -435,6 +709,8 @@ module Synapse
         "option tcpka",
         "option tcplog",
         "option transparent",
+        "external-check command",
+        "external-check path",
         "persist rdp-cookie",
         "rate-limit sessions",
         "redirect",
@@ -464,6 +740,7 @@ module Synapse
         "rspirep",
         "rsprep",
         "server",
+        "server-state-file-name",
         "source",
         "srvtimeout",
         "stats admin",
@@ -494,6 +771,7 @@ module Synapse
         "tcp-response inspect-delay",
         "timeout check",
         "timeout client",
+        "timeout client-fin",
         "timeout clitimeout",
         "timeout connect",
         "timeout contimeout",
@@ -501,6 +779,7 @@ module Synapse
         "timeout http-request",
         "timeout queue",
         "timeout server",
+        "timeout server-fin",
         "timeout srvtimeout",
         "timeout tarpit",
         "timeout tunnel",
@@ -514,30 +793,34 @@ module Synapse
 
     DEFAULT_STATE_FILE_TTL = (60 * 60 * 24).freeze # 24 hours
     STATE_FILE_UPDATE_INTERVAL = 60.freeze # iterations; not a unit of time
+    DEFAULT_BIND_ADDRESS = 'localhost'
 
     def initialize(opts)
-      super()
+      super(opts)
 
-      %w{global defaults reload_command}.each do |req|
+      %w{global defaults}.each do |req|
         raise ArgumentError, "haproxy requires a #{req} section" if !opts.has_key?(req)
       end
-
-      req_pairs = {
-        'do_writes' => 'config_file_path',
-        'do_socket' => 'socket_file_path',
-        'do_reloads' => 'reload_command'}
-
-      req_pairs.each do |cond, req|
-        if opts[cond]
-          raise ArgumentError, "the `#{req}` option is required when `#{cond}` is true" unless opts[req]
-        end
-      end
-
-      @opts = opts
 
       @opts['do_writes'] = true unless @opts.key?('do_writes')
       @opts['do_socket'] = true unless @opts.key?('do_socket')
       @opts['do_reloads'] = true unless @opts.key?('do_reloads')
+
+      req_pairs = {
+        'do_writes' => 'config_file_path',
+        'do_socket' => 'socket_file_path',
+        'do_reloads' => 'reload_command'
+      }
+
+      req_pairs.each do |cond, req|
+        if @opts[cond]
+          raise ArgumentError, "the `#{req}` option is required when `#{cond}` is true" unless @opts[req]
+        end
+      end
+
+      # socket_file_path can be a string or a list
+      # lets make a new option which is always a list (plural)
+      @opts['socket_file_paths'] = [@opts['socket_file_path']].flatten
 
       # how to restart haproxy
       @restart_interval = @opts.fetch('restart_interval', 2).to_i
@@ -555,8 +838,19 @@ module Synapse
       @state_file_ttl = @opts.fetch('state_file_ttl', DEFAULT_STATE_FILE_TTL).to_i
     end
 
-    def name
-      'haproxy'
+    def normalize_watcher_provided_config(service_watcher_name, service_watcher_config)
+      service_watcher_config = super(service_watcher_name, service_watcher_config)
+      defaults = {
+        'server_options' => "",
+        'server_port_override' => nil,
+        'backend' => [],
+        'frontend' => [],
+        'listen' => [],
+      }
+      unless service_watcher_config.include?('port')
+        log.warn "synapse: service #{service_watcher_name}: haproxy config does not include a port; only backend sections for the service will be created; you must move traffic there manually using configuration in `extra_sections`"
+      end
+      defaults.merge(service_watcher_config)
     end
 
     def tick(watchers)
@@ -568,13 +862,15 @@ module Synapse
 
       # We potentially have to restart if the restart was rate limited
       # in the original call to update_config
-      restart if @opts['do_reloads'] && @restart_required
+      restart if opts['do_reloads'] && @restart_required
     end
 
     def update_config(watchers)
       # if we support updating backends, try that whenever possible
-      if @opts['do_socket']
-        update_backends(watchers)
+      if opts['do_socket']
+        opts['socket_file_paths'].each do |socket_path|
+          update_backends_at(socket_path, watchers)
+        end
       else
         @restart_required = true
       end
@@ -583,9 +879,9 @@ module Synapse
       new_config = generate_config(watchers)
 
       # if we write config files, lets do that and then possibly restart
-      if @opts['do_writes']
+      if opts['do_writes']
         write_config(new_config)
-        restart if @opts['do_reloads'] && @restart_required
+        restart if opts['do_reloads'] && @restart_required
       end
     end
 
@@ -595,14 +891,19 @@ module Synapse
       shared_frontend_lines = generate_shared_frontend
 
       watchers.each do |watcher|
+        watcher_config = watcher.config_for_generator[name]
         @watcher_configs[watcher.name] ||= parse_watcher_config(watcher)
+        next if watcher_config['disabled']
         new_config << generate_frontend_stanza(watcher, @watcher_configs[watcher.name]['frontend'])
         new_config << generate_backend_stanza(watcher, @watcher_configs[watcher.name]['backend'])
-        if watcher.haproxy.include?('shared_frontend')
-          if @opts['shared_frontend'] == nil
+        if watcher_config.include?('shared_frontend')
+          if opts['shared_frontend'] == nil
             log.warn "synapse: service #{watcher.name} contains a shared frontend section but the base config does not! skipping."
           else
-            shared_frontend_lines << validate_haproxy_stanza(watcher.haproxy['shared_frontend'].map{|l| "\t#{l}"}, "frontend", "shared frontend section for #{watcher.name}")
+            tabbed_shared_frontend = watcher_config['shared_frontend'].map{|l| "\t#{l}"}
+            shared_frontend_lines << validate_haproxy_stanza(
+              tabbed_shared_frontend, "frontend", "shared frontend section for #{watcher.name}"
+            )
           end
         end
       end
@@ -614,10 +915,10 @@ module Synapse
 
     # pull out the shared frontend section if any
     def generate_shared_frontend
-      return nil unless @opts.include?('shared_frontend')
+      return nil unless opts.include?('shared_frontend')
       log.debug "synapse: found a shared frontend section"
       shared_frontend_lines = ["\nfrontend shared-frontend"]
-      shared_frontend_lines << validate_haproxy_stanza(@opts['shared_frontend'].map{|l| "\t#{l}"}, "frontend", "shared frontend")
+      shared_frontend_lines << validate_haproxy_stanza(opts['shared_frontend'].map{|l| "\t#{l}"}, "frontend", "shared frontend")
       return shared_frontend_lines
     end
 
@@ -627,13 +928,13 @@ module Synapse
 
       %w{global defaults}.each do |section|
         base_config << "#{section}"
-        @opts[section].each do |option|
+        opts[section].each do |option|
           base_config << "\t#{option}"
         end
       end
 
-      if @opts['extra_sections']
-        @opts['extra_sections'].each do |title, section|
+      if opts['extra_sections']
+        opts['extra_sections'].each do |title, section|
           base_config << "\n#{title}"
           section.each do |option|
             base_config << "\t#{option}"
@@ -648,12 +949,13 @@ module Synapse
     # frontend and backend sections
     def parse_watcher_config(watcher)
       config = {}
+      watcher_config = watcher.config_for_generator[name]
       %w{frontend backend}.each do |section|
-        config[section] = watcher.haproxy[section] || []
+        config[section] = watcher_config[section] || []
 
         # copy over the settings from the 'listen' section that pertain to section
         config[section].concat(
-          watcher.haproxy['listen'].select {|setting|
+          watcher_config['listen'].select {|setting|
             parsed_setting = setting.strip.gsub(/\s+/, ' ').downcase
             SECTION_FIELDS[section].any? {|field| parsed_setting.start_with?(field)}
           })
@@ -679,16 +981,37 @@ module Synapse
 
     # generates an individual stanza for a particular watcher
     def generate_frontend_stanza(watcher, config)
-      unless watcher.haproxy.has_key?("port")
+      watcher_config = watcher.config_for_generator[name]
+      unless watcher_config.has_key?("port")
         log.debug "synapse: not generating frontend stanza for watcher #{watcher.name} because it has no port defined"
         return []
+      else
+        port = watcher_config['port']
       end
+
+
+      bind_address = (
+        watcher_config['bind_address'] ||
+        opts['bind_address'] ||
+        DEFAULT_BIND_ADDRESS
+      )
+      backend_name = watcher_config.fetch('backend_name', watcher.name)
+
+      # Explicit null value passed indicating no port needed
+      # For example if the bind_address is a unix port
+      bind_port = port.nil? ? '' : ":#{port}"
+
+      bind_line = [
+        "\tbind",
+        "#{bind_address}#{bind_port}",
+        watcher_config['bind_options']
+      ].compact.join(' ')
 
       stanza = [
         "\nfrontend #{watcher.name}",
         config.map {|c| "\t#{c}"},
-        "\tbind #{ watcher.haproxy['bind_address'] || @opts['bind_address'] || 'localhost'}:#{watcher.haproxy['port']}",
-        "\tdefault_backend #{watcher.haproxy.fetch('backend_name', watcher.name)}"
+        bind_line,
+        "\tdefault_backend #{backend_name}"
       ]
     end
 
@@ -722,7 +1045,8 @@ module Synapse
         log.debug "synapse: no backends found for watcher #{watcher.name}"
       end
 
-      keys = case watcher.haproxy['backend_order']
+      watcher_config = watcher.config_for_generator[name]
+      keys = case watcher_config['backend_order']
       when 'asc'
         backends.keys.sort
       when 'desc'
@@ -734,36 +1058,44 @@ module Synapse
       end
 
       stanza = [
-        "\nbackend #{watcher.haproxy.fetch('backend_name', watcher.name)}",
+        "\nbackend #{watcher_config.fetch('backend_name', watcher.name)}",
         config.map {|c| "\t#{c}"},
         keys.map {|backend_name|
           backend = backends[backend_name]
           b = "\tserver #{backend_name} #{backend['host']}:#{backend['port']}"
           unless config.include?('mode tcp')
-            b = case watcher.haproxy['cookie_value_method']
+            b = case watcher_config['cookie_value_method']
             when 'hash'
               b = "#{b} cookie #{Digest::SHA1.hexdigest(backend_name)}"
             else
               b = "#{b} cookie #{backend_name}"
             end
           end
-          b = "#{b} #{watcher.haproxy['server_options']}" if watcher.haproxy['server_options']
+          b = "#{b} #{watcher_config['server_options']}" if watcher_config['server_options']
           b = "#{b} #{backend['haproxy_server_options']}" if backend['haproxy_server_options']
           b = "#{b} disabled" unless backend['enabled']
           b }
       ]
     end
 
+    def talk_to_socket(socket_file_path, command)
+      s = UNIXSocket.new(socket_file_path)
+      s.write(command)
+      s.read
+    ensure
+      s.close if s
+    end
+
     # tries to set active backends via haproxy's stats socket
     # because we can't add backends via the socket, we might still need to restart haproxy
-    def update_backends(watchers)
+    def update_backends_at(socket_file_path, watchers)
       # first, get a list of existing servers for various backends
       begin
-        s = UNIXSocket.new(@opts['socket_file_path'])
-        s.write("show stat\n")
-        info = s.read()
+        stat_command = "show stat\n"
+        info = talk_to_socket(socket_file_path, stat_command)
       rescue StandardError => e
-        log.warn "synapse: unhandled error reading stats socket: #{e.inspect}"
+        log.warn "synapse: restart required because socket command #{stat_command} failed "\
+                 "with error #{e.inspect}"
         @restart_required = true
         return
       end
@@ -785,6 +1117,7 @@ module Synapse
       watchers.each do |watcher|
         enabled_backends[watcher.name] = []
         next if watcher.backends.empty?
+        next if watcher.config_for_generator[name]['disabled']
 
         unless cur_backends.include? watcher.name
           log.info "synapse: restart required because we added new section #{watcher.name}"
@@ -814,37 +1147,37 @@ module Synapse
 
           # actually write the command to the socket
           begin
-            s = UNIXSocket.new(@opts['socket_file_path'])
-            s.write(command)
-            output = s.read()
+            output = talk_to_socket(socket_file_path, command)
           rescue StandardError => e
-            log.warn "synapse: unknown error writing to socket"
+            log.warn "synapse: restart required because socket command #{command} failed with "\
+                     "error #{e.inspect}"
             @restart_required = true
           else
             unless output == "\n"
-              log.warn "synapse: socket command #{command} failed: #{output}"
+              log.warn "synapse: restart required because socket command #{command} failed with "\
+                      "output #{output}"
               @restart_required = true
             end
           end
         end
       end
 
-      log.info "synapse: reconfigured haproxy"
+      log.info "synapse: reconfigured haproxy via #{socket_file_path}"
     end
 
     # writes the config
     def write_config(new_config)
       begin
-        old_config = File.read(@opts['config_file_path'])
+        old_config = File.read(opts['config_file_path'])
       rescue Errno::ENOENT => e
-        log.info "synapse: could not open haproxy config file at #{@opts['config_file_path']}"
+        log.info "synapse: could not open haproxy config file at #{opts['config_file_path']}"
         old_config = ""
       end
 
       if old_config == new_config
         return false
       else
-        File.open(@opts['config_file_path'],'w') {|f| f.write(new_config)}
+        File.open(opts['config_file_path'],'w') {|f| f.write(new_config)}
         return true
       end
     end

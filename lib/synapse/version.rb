@@ -1,3 +1,3 @@
 module Synapse
-  VERSION = "0.13.3"
+  VERSION = "0.14.1"
 end
