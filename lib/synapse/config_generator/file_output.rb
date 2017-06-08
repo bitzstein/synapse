@@ -21,6 +21,9 @@ class Synapse::ConfigGenerator
       rescue SystemCallError => err
         raise ArgumentError, "provided output directory #{opts['output_directory']} is not present or creatable"
       end
+
+      # For tracking backends that we don't need to update
+      @watcher_revisions = {}
     end
 
     def tick(watchers)
@@ -28,7 +31,12 @@ class Synapse::ConfigGenerator
 
     def update_config(watchers)
       watchers.each do |watcher|
-        write_backends_to_file(watcher.name, watcher.backends)
+        next if watcher.config_for_generator[name]['disabled']
+
+        unless @watcher_revisions[watcher.name] == watcher.revision
+          @watcher_revisions[watcher.name] = watcher.revision
+          write_backends_to_file(watcher.name, watcher.backends)
+        end
       end
       clean_old_watchers(watchers)
     end
@@ -60,7 +68,8 @@ class Synapse::ConfigGenerator
       # Cleanup old services that Synapse no longer manages
       FileUtils.cd(opts['output_directory']) do
         present_files = Dir.glob('*.json')
-        managed_files = current_watchers.collect {|watcher| "#{watcher.name}.json"}
+        managed_watchers = current_watchers.reject {|watcher| watcher.config_for_generator[name]['disabled']}
+        managed_files = managed_watchers.collect {|watcher| "#{watcher.name}.json"}
         files_to_purge = present_files.select {|svc| not managed_files.include?(svc)}
         log.info "synapse: purging unknown service files #{files_to_purge}" if files_to_purge.length > 0
         FileUtils.rm(files_to_purge)
